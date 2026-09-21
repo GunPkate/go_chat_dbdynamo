@@ -1,0 +1,36 @@
+schema:
+  - schema.graphqls
+
+exec:
+  filename: generated/generated.go
+  package: generated
+
+model:
+  filename: generated/models_gen.go
+  package: generated
+
+resolver:
+  layout: single-file
+  filename: graph/schema.resolvers.go
+  package: graph
+
+# Bind GraphQL types directly to the structs already used by the
+# DynamoDB-backed logic package, instead of generating fresh duplicate
+# types. This means Query/Mutation/Subscription resolvers can return
+# *logic.Message etc. straight from the logic package with no manual
+# conversion step.
+models:
+  ID:
+    model:
+      - github.com/99designs/gqlgen/graphql.ID
+  AWSDateTime:
+    model:
+      - github.com/99designs/gqlgen/graphql.String
+  Message:
+    model: appsync-chat-go/local-server/logic.Message
+  Conversation:
+    model: appsync-chat-go/local-server/logic.Conversation
+  TypingEvent:
+    model: appsync-chat-go/local-server/logic.TypingEvent
+  PresenceEvent:
+    model: appsync-chat-go/local-server/logic.PresenceEvent

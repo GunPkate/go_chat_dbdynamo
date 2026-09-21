@@ -1,0 +1,12 @@
+# Runs the Lambda resolver's Go tests inside a container, so `docker
+# compose run tests` works without a local Go install either.
+FROM golang:1.22
+
+WORKDIR /app
+COPY go.mod ./
+COPY main.go main_test.go ./
+
+# No go.sum is checked in, so resolve + verify deps at build/run time.
+RUN go mod tidy
+
+CMD ["go", "test", "./...", "-v"]

@@ -1,0 +1,82 @@
+# Everything here runs with dummy "local"/"local" credentials — no AWS
+# account, IAM user, or network access to AWS is required.
+services:
+
+  # The database. Data lives in-memory in the container (add a volume +
+  # drop -inMemory if you want it to survive `docker compose down`).
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: appsync-chat-dynamodb
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-inMemory"]
+    ports:
+      - "8000:8000"
+
+  # One-shot job: creates ChatMessages, UserConversations and
+  # ChatIdempotency, then exits. Safe to re-run — it skips tables that
+  # already exist.
+  create-tables:
+    image: amazon/aws-cli:latest
+    container_name: appsync-chat-create-tables
+    depends_on:
+      - dynamodb-local
+    environment:
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["sh", "/scripts/create-tables.sh"]
+    volumes:
+      - ./scripts/create-tables.sh:/scripts/create-tables.sh:ro
+
+  # Optional web UI for browsing/editing table contents at
+  # http://localhost:8001 — handy for debugging test data.
+  dynamodb-admin:
+    image: aaronshaf/dynamodb-admin:latest
+    container_name: appsync-chat-dynamodb-admin
+    depends_on:
+      - dynamodb-local
+    environment:
+      DYNAMO_ENDPOINT: http://dynamodb-local:8000
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      AWS_REGION: us-east-1
+    ports:
+      - "8001:8001"
+
+  # Runs the full Go test suite against dynamodb-local. Usage:
+  #   docker compose run --rm tests
+  tests:
+    build:
+      context: ./lambda
+      dockerfile: Dockerfile.test
+    container_name: appsync-chat-tests
+    depends_on:
+      - create-tables
+    environment:
+      DYNAMODB_LOCAL_ENDPOINT: http://dynamodb-local:8000
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      AWS_REGION: us-east-1
+      MESSAGES_TABLE: ChatMessages
+      CONVERSATIONS_TABLE: UserConversations
+      IDEMPOTENCY_TABLE: ChatIdempotency
+
+  # The AppSync stand-in: a gqlgen GraphQL server exposing the same
+  # schema (queries, mutations, subscriptions) over HTTP + WebSocket.
+  # Playground at http://localhost:8080/ once it's up.
+  local-server:
+    build:
+      context: ./local-server
+    container_name: appsync-chat-local-server
+    depends_on:
+      - create-tables
+    environment:
+      DYNAMODB_LOCAL_ENDPOINT: http://dynamodb-local:8000
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      AWS_REGION: us-east-1
+      MESSAGES_TABLE: ChatMessages
+      CONVERSATIONS_TABLE: UserConversations
+      IDEMPOTENCY_TABLE: ChatIdempotency
+      PORT: "8080"
+    ports:
+      - "8080:8080"

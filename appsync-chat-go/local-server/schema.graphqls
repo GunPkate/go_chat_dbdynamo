@@ -1,0 +1,74 @@
+scalar AWSDateTime
+
+type Message {
+  chatRoomId: ID!
+  createdAt: AWSDateTime!
+  id: ID!
+  sender: String!
+  content: String!
+  attachmentKey: String
+  editedAt: AWSDateTime
+  deleted: Boolean
+  readAt: AWSDateTime
+  readBy: String
+  deliveredAt: AWSDateTime
+}
+
+type Conversation {
+  userId: String!
+  chatRoomId: ID!
+  lastMessage: String
+  lastMessageAt: AWSDateTime
+  unreadCount: Int
+}
+
+type TypingEvent {
+  chatRoomId: ID!
+  sender: String!
+  isTyping: Boolean!
+}
+
+type PresenceEvent {
+  userId: String!
+  online: Boolean!
+  lastSeen: AWSDateTime
+}
+
+type Query {
+  getMessages(chatRoomId: ID!, limit: Int, since: AWSDateTime): [Message!]!
+  listConversations(userId: String!): [Conversation!]!
+  getUnreadCount(chatRoomId: ID!, userId: String!): Int!
+}
+
+type Mutation {
+  sendMessage(
+    chatRoomId: ID!
+    sender: String!
+    content: String!
+    clientToken: String!
+    attachmentKey: String
+    participants: [String!]
+  ): Message!
+
+  editMessage(chatRoomId: ID!, createdAt: AWSDateTime!, id: ID!, content: String!): Message!
+  deleteMessage(chatRoomId: ID!, createdAt: AWSDateTime!, id: ID!): Message!
+  markAsRead(chatRoomId: ID!, createdAt: AWSDateTime!, id: ID!, reader: String!): Message!
+  markAsDelivered(chatRoomId: ID!, createdAt: AWSDateTime!, id: ID!): Message!
+
+  sendTypingEvent(chatRoomId: ID!, sender: String!, isTyping: Boolean!): TypingEvent!
+  setPresence(userId: String!, online: Boolean!): PresenceEvent!
+}
+
+# Plain gqlgen has no @aws_subscribe equivalent — each of these is wired
+# by hand in graph/schema.resolvers.go to a small in-memory pub/sub broker
+# that the corresponding Mutation resolver publishes to after a successful
+# write. See logic/broker.go.
+type Subscription {
+  onMessageSent(chatRoomId: ID!): Message!
+  onMessageEdited(chatRoomId: ID!): Message!
+  onMessageDeleted(chatRoomId: ID!): Message!
+  onReadReceipt(chatRoomId: ID!): Message!
+  onDeliveredReceipt(chatRoomId: ID!): Message!
+  onTyping(chatRoomId: ID!): TypingEvent!
+  onPresenceChanged(userId: String!): PresenceEvent!
+}

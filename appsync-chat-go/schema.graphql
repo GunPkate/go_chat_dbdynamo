@@ -1,0 +1,96 @@
+type Message {
+  chatRoomId: ID!
+  createdAt: AWSDateTime!
+  id: ID!
+  sender: String!
+  content: String!
+  attachmentKey: String
+  editedAt: AWSDateTime
+  deleted: Boolean
+  readAt: AWSDateTime
+  readBy: String
+  deliveredAt: AWSDateTime
+}
+
+type Conversation {
+  userId: String!
+  chatRoomId: ID!
+  lastMessage: String
+  lastMessageAt: AWSDateTime
+  unreadCount: Int
+}
+
+type TypingEvent {
+  chatRoomId: ID!
+  sender: String!
+  isTyping: Boolean!
+}
+
+type PresenceEvent {
+  userId: String!
+  online: Boolean!
+  lastSeen: AWSDateTime
+}
+
+type Query {
+  # limit: max items to return. since: only return messages newer than this
+  # timestamp — used on reconnect to fetch only what was missed.
+  getMessages(chatRoomId: ID!, limit: Int, since: AWSDateTime): [Message]
+  listConversations(userId: String!): [Conversation]
+  getUnreadCount(chatRoomId: ID!, userId: String!): Int
+}
+
+type Mutation {
+  # clientToken: a client-generated idempotency key (e.g. UUID kept in
+  # local state until the send confirms). Retrying with the same token
+  # returns the original message instead of creating a duplicate.
+  # participants: optional list of user IDs in the room, used to update
+  # each participant's conversation list / unread count.
+  sendMessage(
+    chatRoomId: ID!
+    sender: String!
+    content: String!
+    clientToken: String!
+    attachmentKey: String
+    participants: [String!]
+  ): Message
+
+  editMessage(chatRoomId: ID!, createdAt: AWSDateTime!, id: ID!, content: String!): Message
+  deleteMessage(chatRoomId: ID!, createdAt: AWSDateTime!, id: ID!): Message
+  markAsRead(chatRoomId: ID!, createdAt: AWSDateTime!, id: ID!, reader: String!): Message
+  markAsDelivered(chatRoomId: ID!, createdAt: AWSDateTime!, id: ID!): Message
+
+  # Lightweight, non-persisted events — the Lambda just echoes them back
+  # so AppSync can fan them out to subscribers.
+  sendTypingEvent(chatRoomId: ID!, sender: String!, isTyping: Boolean!): TypingEvent
+  setPresence(userId: String!, online: Boolean!): PresenceEvent
+}
+
+type Subscription {
+  onMessageSent(chatRoomId: ID!): Message
+    @aws_subscribe(mutations: ["sendMessage"])
+
+  onMessageEdited(chatRoomId: ID!): Message
+    @aws_subscribe(mutations: ["editMessage"])
+
+  onMessageDeleted(chatRoomId: ID!): Message
+    @aws_subscribe(mutations: ["deleteMessage"])
+
+  onReadReceipt(chatRoomId: ID!): Message
+    @aws_subscribe(mutations: ["markAsRead"])
+
+  onDeliveredReceipt(chatRoomId: ID!): Message
+    @aws_subscribe(mutations: ["markAsDelivered"])
+
+  onTyping(chatRoomId: ID!): TypingEvent
+    @aws_subscribe(mutations: ["sendTypingEvent"])
+
+  onPresenceChanged(userId: String!): PresenceEvent
+    @aws_subscribe(mutations: ["setPresence"])
+}
+
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}
