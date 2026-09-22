@@ -1,6 +1,6 @@
 module appsync-chat-go/local-server
 
-go 1.22
+go 1.26.0
 
 require (
 	github.com/99designs/gqlgen v0.17.44
@@ -11,6 +11,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.43.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
+	github.com/vektah/gqlparser/v2 v2.5.16
 )
 
 require (
@@ -30,5 +31,5 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/sosodev/duration v1.3.1 // indirect
-	github.com/vektah/gqlparser/v2 v2.5.16 // indirect
+	golang.org/x/net v0.59.0 // indirect
 )
