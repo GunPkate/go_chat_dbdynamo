@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Chat tester — local-server</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #17181a;
+    --panel: #202226;
+    --panel-line: #34363b;
+    --text: #e7e6e2;
+    --muted: #8d8f95;
+    --accent: #d9a441;
+    --ok: #5fb88a;
+    --err: #d97757;
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px;
+  }
+  main {
+    width: 100%;
+    max-width: 640px;
+  }
+  h1 {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 0 0 2px;
+  }
+  .sub {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    color: var(--muted);
+    margin: 0 0 20px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-line);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .row:last-child { margin-bottom: 0; }
+  label {
+    font-size: 11px;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 4px;
+  }
+  .field { flex: 1; }
+  input {
+    width: 100%;
+    background: #131416;
+    border: 1px solid var(--panel-line);
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: var(--text);
+    font-size: 13px;
+  }
+  input:focus { outline: 1px solid var(--accent); }
+  button {
+    background: var(--accent);
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1a1206;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.secondary {
+    background: transparent;
+    border: 1px solid var(--panel-line);
+    color: var(--text);
+  }
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 10px;
+  }
+  .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--muted);
+  }
+  .dot.ok { background: var(--ok); }
+  .dot.err { background: var(--err); }
+  #log {
+    height: 320px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .msg {
+    max-width: 85%;
+  }
+  .msg .meta {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 2px;
+  }
+  .msg .bubble {
+    background: #2a2c31;
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 14px;
+    line-height: 1.4;
+    word-wrap: break-word;
+  }
+  .msg.mine { align-self: flex-end; }
+  .msg.mine .bubble { background: #3a3220; }
+  .empty {
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+    margin-top: 40px;
+  }
+  .composer { display: flex; gap: 8px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Chat tester</h1>
+  <p class="sub">talks directly to local-server's GraphQL endpoint — no AWS involved</p>
+
+  <div class="panel">
+    <div class="row">
+      <div class="field">
+        <label for="serverUrl">Server URL</label>
+        <input id="serverUrl" value="http://localhost:8080" />
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label for="roomId">Room ID</label>
+        <input id="roomId" value="room-1" />
+      </div>
+      <div class="field">
+        <label for="sender">Your name</label>
+        <input id="sender" value="alice" />
+      </div>
+      <div style="align-self: flex-end;">
+        <button id="joinBtn">Join room</button>
+      </div>
+    </div>
+    <div class="status">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">not connected</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div id="log"><div class="empty">Join a room to load history and subscribe</div></div>
+    <div class="composer">
+      <input id="content" placeholder="Type a message…" disabled />
+      <button id="sendBtn" disabled>Send</button>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const logEl = $("log"), statusDot = $("statusDot"), statusText = $("statusText");
+const contentInput = $("content"), sendBtn = $("sendBtn"), joinBtn = $("joinBtn");
+
+let ws = null;
+let subId = null;
+let currentRoom = null;
+let currentSender = null;
+
+function setStatus(text, kind) {
+  statusText.textContent = text;
+  statusDot.className = "dot" + (kind ? " " + kind : "");
+}
+
+function clearLog() {
+  logEl.innerHTML = "";
+}
+
+function appendMessage(msg) {
+  if (logEl.querySelector(".empty")) logEl.innerHTML = "";
+  const mine = msg.sender === currentSender;
+  const div = document.createElement("div");
+  div.className = "msg" + (mine ? " mine" : "");
+  const time = new Date(msg.createdAt).toLocaleTimeString();
+  div.innerHTML = `
+    <div class="meta">${escapeHtml(msg.sender)} · ${time}</div>
+    <div class="bubble">${escapeHtml(msg.content)}</div>
+  `;
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+// ---- HTTP: queries + mutations ----
+
+async function gql(query, variables) {
+  const url = $("serverUrl").value.replace(/\/$/, "") + "/query";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, variables }),
+  });
+  const json = await res.json();
+  if (json.errors) throw new Error(json.errors.map((e) => e.message).join("; "));
+  return json.data;
+}
+
+async function loadHistory(roomId) {
+  const data = await gql(
+    `query($chatRoomId: ID!) {
+      getMessages(chatRoomId: $chatRoomId) { id sender content createdAt }
+    }`,
+    { chatRoomId: roomId }
+  );
+  clearLog();
+  // getMessages returns newest-first; show oldest-first in the log.
+  [...data.getMessages].reverse().forEach(appendMessage);
+}
+
+async function sendMessage(roomId, sender, content) {
+  const clientToken = crypto.randomUUID();
+  const data = await gql(
+    `mutation($chatRoomId: ID!, $sender: String!, $content: String!, $clientToken: String!) {
+      sendMessage(chatRoomId: $chatRoomId, sender: $sender, content: $content, clientToken: $clientToken) {
+        id sender content createdAt
+      }
+    }`,
+    { chatRoomId: roomId, sender, content, clientToken }
+  );
+  return data.sendMessage;
+}
+
+// ---- WebSocket: subscription, using the graphql-ws protocol ----
+// (connection_init -> connection_ack -> subscribe -> next/complete/error)
+
+function subscribe(roomId) {
+  if (ws) ws.close();
+
+  const wsUrl = $("serverUrl").value.replace(/\/$/, "").replace(/^http/, "ws") + "/query";
+  ws = new WebSocket(wsUrl, "graphql-transport-ws");
+  setStatus("connecting…");
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: "connection_init" }));
+  };
+
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    switch (msg.type) {
+      case "connection_ack":
+        subId = crypto.randomUUID();
+        ws.send(JSON.stringify({
+          id: subId,
+          type: "subscribe",
+          payload: {
+            query: `subscription($chatRoomId: ID!) {
+              onMessageSent(chatRoomId: $chatRoomId) { id sender content createdAt }
+            }`,
+            variables: { chatRoomId: roomId },
+          },
+        }));
+        setStatus("connected — " + roomId, "ok");
+        break;
+      case "next":
+        if (msg.id === subId) appendMessage(msg.payload.data.onMessageSent);
+        break;
+      case "error":
+        setStatus("subscription error (see console)", "err");
+        console.error("subscription error:", msg.payload);
+        break;
+    }
+  };
+
+  ws.onclose = () => setStatus("disconnected", "err");
+  ws.onerror = () => setStatus("connection failed — check server URL / CORS", "err");
+}
+
+// ---- UI wiring ----
+
+joinBtn.addEventListener("click", async () => {
+  const roomId = $("roomId").value.trim();
+  const sender = $("sender").value.trim();
+  if (!roomId || !sender) return;
+
+  currentRoom = roomId;
+  currentSender = sender;
+
+  try {
+    setStatus("loading history…");
+    await loadHistory(roomId);
+    subscribe(roomId);
+    contentInput.disabled = false;
+    sendBtn.disabled = false;
+  } catch (err) {
+    setStatus("failed to load: " + err.message, "err");
+  }
+});
+
+async function doSend() {
+  const content = contentInput.value.trim();
+  if (!content || !currentRoom) return;
+  contentInput.value = "";
+  try {
+    // No optimistic local append here — since we're also subscribed to
+    // onMessageSent for this room, the broker echoes our own message back
+    // to us over the WebSocket just like it does to every other client.
+    await sendMessage(currentRoom, currentSender, content);
+  } catch (err) {
+    setStatus("send failed: " + err.message, "err");
+  }
+}
+
+sendBtn.addEventListener("click", doSend);
+contentInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") doSend();
+});
+</script>
+</body>
+</html>
