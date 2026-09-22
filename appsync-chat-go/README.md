@@ -109,15 +109,14 @@ and can run the full Go test suite against them, all with dummy
 credentials.
 
 ```bash
-# 1. Start the database and create tables
-docker compose up dynamodb-local create-tables
+# 1. Start the database, create tables, and the DynamoDB admin UI
+docker compose up dynamodb-local create-tables dynamodb-admin
 
 # 2. In another terminal, run the tests (builds a throwaway Go image)
 docker compose run --rm tests
-
-# Optional: browse table contents at http://localhost:8001
-docker compose up dynamodb-admin
 ```
+
+Browse table contents any time at **http://localhost:8001**.
 
 `lambda/main_test.go` calls the resolver functions (`sendMessage`,
 `getMessages`, `editMessage`, `markAsRead`, `listConversations`, etc.)
@@ -152,7 +151,7 @@ isolation; testing the actual subscription fan-out still needs a real
 resolver logic) with no AWS account:
 
 ```bash
-docker compose up dynamodb-local create-tables local-server
+docker compose up dynamodb-local create-tables dynamodb-admin local-server
 ```
 
 Then open **http://localhost:8080/** for the GraphQL Playground. Try:
@@ -218,6 +217,95 @@ out to subscribers connected to that one running instance. Fine for local
 dev with a single server; a real multi-instance deployment is exactly the
 problem AppSync (or a shared broker like Redis pub/sub) solves.
 
+## Testing with a real frontend
+
+`frontend/index.html` is a small, dependency-free test UI — plain HTML/JS,
+no build step — that talks directly to `local-server`'s GraphQL endpoint.
+
+**Important:** `http://dynamodb-local:8000` (the address you see in
+`docker compose` logs) only resolves *inside* the Docker Compose network —
+your browser can't reach it, and shouldn't need to. A frontend should
+never talk to DynamoDB directly; it talks to the GraphQL layer
+(`local-server`, AppSync's stand-in here), which is published to your
+host machine at **`http://localhost:8080`**.
+
+```bash
+docker compose up dynamodb-local create-tables dynamodb-admin local-server
+```
+
+Then just open `frontend/index.html` directly in a browser (double-click
+it, or `open frontend/index.html` / `start frontend/index.html`) — no
+server needed, since `local-server` already sends permissive CORS headers
+for local dev.
+
+**If you get "Failed to fetch" in the browser:** this is almost always
+Chrome's Private Network Access policy silently blocking the request
+because the page has no clear origin (a `file://` page looks the same as
+a public site to this check). `server.go` already sends the header that
+opts back in, but if it still happens, serve the frontend over plain HTTP
+instead of opening it as a raw file — it sidesteps the ambiguity entirely:
+
+```bash
+cd frontend
+python3 -m http.server 5500
+# then open http://localhost:5500/ in your browser
+```
+
+**To see real-time delivery working:** open the file in two browser tabs
+(or two different browsers), set the same **Room ID** in both, a
+different **Your name** in each, click **Join room** in both, then send a
+message from one tab — it should appear in the other tab instantly over
+the WebSocket subscription, with no page refresh.
+
+The page does three things, all against `local-server`:
+1. **`getMessages` query** on join, to load history
+2. **`sendMessage` mutation** over HTTP when you hit Send
+3. **`onMessageSent` subscription** over WebSocket (using the
+   `graphql-transport-ws` protocol), which is how every joined tab —
+   including your own — receives new messages in real time
+
+## Debugging in VS Code
+
+`.vscode/launch.json` has two ready-made debug configs: **Debug
+local-server** and **Debug lambda tests**, both with real breakpoint
+support (set a breakpoint in `graph/schema.resolvers.go` or any
+`logic/*.go` file and it'll actually stop there).
+
+**Prerequisites (one-time):**
+1. Install the [Go extension](https://marketplace.visualstudio.com/items?itemName=golang.go) for VS Code.
+2. Install Delve, the Go debugger it uses under the hood:
+   ```bash
+   go install github.com/go-delve/delve/cmd/dlv@latest
+   ```
+3. **Important:** `local-server`'s `generated/` package (gqlgen's exec
+   schema) is currently only produced *inside the Docker build* — it
+   doesn't exist in your checked-out folder, so VS Code can't compile the
+   package to debug it yet. Generate it once, locally:
+   ```bash
+   cd local-server
+   go mod tidy
+   go run github.com/99designs/gqlgen generate
+   ```
+   Re-run this any time you change `schema.graphqls`. (`generated/` is
+   build output — fine to add to `.gitignore` if you're versioning this.)
+
+**To debug:**
+1. Open the project root (the folder containing `docker-compose.yml`) in
+   VS Code — the launch config's paths assume that's your workspace root.
+2. Start just the database (not `local-server` — VS Code will run that
+   part for you): `docker compose up dynamodb-local create-tables dynamodb-admin`
+3. Open VS Code's **Run and Debug** panel (`Cmd/Ctrl+Shift+D`), pick
+   **Debug local-server** from the dropdown, and hit the green play
+   button (or `F5`).
+4. Set a breakpoint (click left of a line number) in, say,
+   `logic/messages.go`'s `SendMessage`, then trigger it from the
+   Playground, the frontend, or `curl` — execution will pause there with
+   full variable inspection, call stack, etc.
+
+**Debug lambda tests** does the same for `lambda/main_test.go` — pick it,
+hit `F5`, and it runs (and lets you breakpoint into) the whole test suite
+directly, no Docker rebuild needed for the Lambda side either.
+
 ## Extending the client
 
 `client/main.go` still only implements the original `sendMessage(chatRoomId,
@@ -246,3 +334,41 @@ mutation/subscription pair you want to try (e.g. `sendTypingEvent` /
   client-side, before calling the mutation — the Lambda only stores the key.
 - **Idempotency table TTL**: enable DynamoDB TTL on `ChatIdempotency`'s
   `expiresAt` attribute so old tokens are cleaned up automatically.
+
+## Debug local
+- **Window command**: set env for installing missing libs
+```
+$env:GOFLAGS="-mod=mod"
+go get golang.org/x/tools@latest
+go run github.com/99designs/gqlgen generate
+Remove-Item Env:GOFLAGS
+go mod tidy
+```
+
+- **MACOS command**: set env for installing missing libs
+```
+export GOFLAGS=-mod=mod
+go get golang.org/x/tools@latest
+go run github.com/99designs/gqlgen generate
+unset GOFLAGS
+go mod tidy
+```
+
+- **Config Launch.json**: press debug and disable local-server in docker-compse.yml
+```
+    {
+      "name": "Debug local-server",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/local-server",
+      "env": {
+        "DYNAMODB_LOCAL_ENDPOINT": "http://localhost:8000",
+        "AWS_REGION": "us-east-1",
+        "MESSAGES_TABLE": "ChatMessages",
+        "CONVERSATIONS_TABLE": "UserConversations",
+        "IDEMPOTENCY_TABLE": "ChatIdempotency",
+        "PORT": "8080"
+      }
+    },
+```
