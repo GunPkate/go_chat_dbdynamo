@@ -1,7 +1,13 @@
+"use client";
 import { Search, Plus, Pin, Hash, UsersRound, Bot } from "lucide-react";
 import "../css/ConversationList.css";
+import { useChatStore } from "../../chat/store/chat-store";
 
 export function ConversationList() {
+  const conversations = useChatStore((s) => s.conversations);
+  const selectedId = useChatStore((s) => s.selectedId);
+  const setSelected = useChatStore((s) => s.setSelected);
+
   return (
     <div className="conversation-list">
       <header className="list-header">
@@ -19,7 +25,7 @@ export function ConversationList() {
 
       <div className="list-section">
         <div className="section-title">Recent</div>
-        {/* {conversations.map((conversation) => {
+        {conversations.map((conversation) => {
           const Icon = conversation.type === "CHANNEL" ? Hash : conversation.title === "Hotel AI" ? Bot : conversation.type === "GROUP" ? UsersRound : null;
           return (
             <button
@@ -43,7 +49,7 @@ export function ConversationList() {
               </div>
             </button>
           );
-        })} */}
+        })}
       </div>
 
       <div className="list-footer">

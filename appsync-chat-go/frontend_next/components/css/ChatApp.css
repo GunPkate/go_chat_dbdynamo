@@ -1,11 +1,5 @@
 @import "tailwindcss";
 
-:root {
-  --bg: #f7f8fa;
-  --panel: #ffffff;
-  --border: #e5e7eb;
-}
-
 .app-shell {
   height: 100vh;
   display: grid;
