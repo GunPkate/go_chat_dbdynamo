@@ -1,4 +1,5 @@
 import { Search, Plus, Pin, Hash, UsersRound, Bot } from "lucide-react";
+import "../css/ConversationList.css";
 
 export function ConversationList() {
   return (
@@ -18,7 +19,31 @@ export function ConversationList() {
 
       <div className="list-section">
         <div className="section-title">Recent</div>
-
+        {/* {conversations.map((conversation) => {
+          const Icon = conversation.type === "CHANNEL" ? Hash : conversation.title === "Hotel AI" ? Bot : conversation.type === "GROUP" ? UsersRound : null;
+          return (
+            <button
+              key={conversation.id}
+              className={`conversation-item ${selectedId === conversation.id ? "selected" : ""}`}
+              onClick={() => setSelected(conversation.id)}
+            >
+              <div className="avatar-wrap">
+                <div className="conversation-avatar">{Icon ? <Icon size={18} /> : conversation.avatar}</div>
+                {conversation.online && <span className="online-dot" />}
+              </div>
+              <div className="conversation-main">
+                <div className="conversation-top">
+                  <strong>{conversation.title}</strong>
+                  <span className="time">{conversation.messages.at(-1)?.createdAt}</span>
+                </div>
+                <div className="conversation-bottom">
+                  <span>{conversation.messages.at(-1)?.content}</span>
+                  {conversation.unread > 0 && <b className="unread">{conversation.unread}</b>}
+                </div>
+              </div>
+            </button>
+          );
+        })} */}
       </div>
 
       <div className="list-footer">

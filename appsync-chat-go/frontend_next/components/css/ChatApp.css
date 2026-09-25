@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f7f8fa;
+  --panel: #ffffff;
+  --border: #e5e7eb;
+}
+
+.app-shell {
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 76px 340px 1fr;
+  overflow: hidden;
+}
+
+.conversation-pane {
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  min-width: 0;
+}
+
+.chat-pane {
+  min-width: 0;
+  background: var(--panel);
+}
+

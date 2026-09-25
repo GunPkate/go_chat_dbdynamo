@@ -1,5 +1,6 @@
 import { MessageSquare, Users, CalendarDays, Files, Search, Settings, LayoutGrid } from "lucide-react";
 import { currentUser } from "../../lib/mock-data";
+import "../css/Sidebar.css";
 
 export function Sidebar() {
     return (

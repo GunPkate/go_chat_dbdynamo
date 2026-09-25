@@ -1,0 +1,49 @@
+.conversation-list { height: 100%; display: flex; flex-direction: column; }
+.list-header { display: flex; align-items: center; justify-content: space-between; padding: 22px 18px 14px; }
+.list-header h1 { margin: 0; font-size: 22px; }
+.list-footer { margin-top: auto; padding: 14px 18px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 7px; }
+.list-section { overflow-y: auto; }
+.section-title { padding: 6px 18px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-size: 10px; font-weight: 700; }
+
+.conversation-item {
+  display: flex;
+  width: 100%;
+  gap: 10px;
+  padding: 10px 18px;
+  border: 0;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.conversation-item:hover,
+.conversation-item.selected {
+  background: var(--accent-soft);
+}
+
+
+.muted {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.search-box { margin: 0 14px 14px; display: flex; gap: 8px; align-items: center; padding: 9px 11px; border: 1px solid var(--border); background: #fafafa; border-radius: 8px; color: var(--muted); }
+.search-box input { width: 100%; border: 0; outline: 0; background: transparent; font-size: 13px; }

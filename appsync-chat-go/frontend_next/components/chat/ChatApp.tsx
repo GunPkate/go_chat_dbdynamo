@@ -1,6 +1,7 @@
 import { ChatWindow } from "./ChatWindow";
 import { ConversationList } from "./ConversationList";
 import { Sidebar } from "./Sidebar";
+import "../css/ChatApp.css";
 
 export function ChatApp() {
     return (
