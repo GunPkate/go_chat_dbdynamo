@@ -35,6 +35,19 @@
   flex: 1;
 }
 
+.conversation-bottom {
+  margin-top: 5px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.conversation-bottom span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .conversation-top,
 .conversation-bottom {
   display: flex;
