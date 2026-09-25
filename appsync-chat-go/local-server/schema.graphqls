@@ -34,10 +34,48 @@ type PresenceEvent {
   lastSeen: AWSDateTime
 }
 
+# --- Product catalog + AI features ---
+
+type Product {
+  id: ID!
+  name: String!
+  description: String!
+  category: String!
+  price: Float!
+  stock: Int!
+  tags: [String!]!
+}
+
+# A generic AI-assistant reply. "products" is populated for the
+# customer-facing features (search/recommend/substitute) so the UI can
+# render real product cards alongside the assistant's natural-language
+# answer; it's empty for the staff features, which are Q&A-only.
+type AssistantReply {
+  answer: String!
+  products: [Product!]!
+}
+
 type Query {
   getMessages(chatRoomId: ID!, limit: Int, since: AWSDateTime): [Message!]!
   listConversations(userId: String!): [Conversation!]!
   getUnreadCount(chatRoomId: ID!, userId: String!): Int!
+
+  # --- Customer side ---
+  # 4. Natural-language product search, e.g. "something spicy and quick".
+  searchProducts(query: String!): AssistantReply!
+  # 5. General recommendations, optionally nudged by free-text context
+  # (e.g. "I'm vegetarian" or "celebrating an anniversary").
+  recommendedProducts(context: String): AssistantReply!
+  # 8. Given a product that's out of stock or otherwise unwanted,
+  # suggest similar in-stock alternatives.
+  substituteProducts(productId: ID!): AssistantReply!
+
+  # --- Employee side ---
+  # 7. Stock-aware Q&A: reorder suggestions, what's running low, etc.
+  stockInsights(question: String!): AssistantReply!
+  # 9. General staff assistant — broader scope than stock alone, but
+  # still grounded in the current catalog/stock as context.
+  staffAssistant(question: String!): AssistantReply!
 }
 
 type Mutation {

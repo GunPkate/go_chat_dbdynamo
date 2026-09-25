@@ -34,3 +34,7 @@ models:
     model: appsync-chat-go/local-server/logic.TypingEvent
   PresenceEvent:
     model: appsync-chat-go/local-server/logic.PresenceEvent
+  Product:
+    model: appsync-chat-go/local-server/logic.Product
+  AssistantReply:
+    model: appsync-chat-go/local-server/logic.AssistantReply

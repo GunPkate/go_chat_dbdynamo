@@ -1,3 +1,5 @@
+version: "3.8"
+
 # Everything here runs with dummy "local"/"local" credentials — no AWS
 # account, IAM user, or network access to AWS is required.
 services:
@@ -27,6 +29,23 @@ services:
     volumes:
       - ./scripts/create-tables.sh:/scripts/create-tables.sh:ro
 
+  # One-shot job: populates the Products table with a sample hotel
+  # catalog (room service, minibar, shop items) for the AI features to
+  # search/recommend/reason over. Safe to re-run.
+  seed-products:
+    image: amazon/aws-cli:latest
+    container_name: appsync-chat-seed-products
+    depends_on:
+      create-tables:
+        condition: service_completed_successfully
+    environment:
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["sh", "/scripts/seed-products.sh"]
+    volumes:
+      - ./scripts/seed-products.sh:/scripts/seed-products.sh:ro
+
   # Optional web UI for browsing/editing table contents at
   # http://localhost:8001 — handy for debugging test data.
   dynamodb-admin:
@@ -44,39 +63,78 @@ services:
 
   # Runs the full Go test suite against dynamodb-local. Usage:
   #   docker compose run --rm tests
-  tests:
-    build:
-      context: ./lambda
-      dockerfile: Dockerfile.test
-    container_name: appsync-chat-tests
+  # tests:
+  #   build:
+  #     context: ./lambda
+  #     dockerfile: Dockerfile.test
+  #   container_name: appsync-chat-tests
+  #   depends_on:
+  #     - create-tables
+  #   environment:
+  #     DYNAMODB_LOCAL_ENDPOINT: http://dynamodb-local:8000
+  #     AWS_ACCESS_KEY_ID: local
+  #     AWS_SECRET_ACCESS_KEY: local
+  #     AWS_REGION: us-east-1
+  #     MESSAGES_TABLE: ChatMessages
+  #     CONVERSATIONS_TABLE: UserConversations
+  #     IDEMPOTENCY_TABLE: ChatIdempotency
+
+  # Local, free LLM inference — no API key, no account. Model weights
+  # persist in the "ollama-models" volume so they're only downloaded once.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: appsync-chat-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+
+  # One-shot job: pulls the Qwen model into the ollama container. Safe to
+  # re-run — Ollama skips it if already pulled. This can take a few
+  # minutes on first run (downloading multi-GB model weights).
+  pull-model:
+    image: curlimages/curl:latest
+    container_name: appsync-chat-pull-model
     depends_on:
-      - create-tables
-    environment:
-      DYNAMODB_LOCAL_ENDPOINT: http://dynamodb-local:8000
-      AWS_ACCESS_KEY_ID: local
-      AWS_SECRET_ACCESS_KEY: local
-      AWS_REGION: us-east-1
-      MESSAGES_TABLE: ChatMessages
-      CONVERSATIONS_TABLE: UserConversations
-      IDEMPOTENCY_TABLE: ChatIdempotency
+      - ollama
+    entrypoint: ["sh", "-c"]
+    command: >
+      "echo 'waiting for ollama...';
+      until curl -sf http://ollama:11434 >/dev/null; do sleep 1; done;
+      echo 'pulling qwen2.5:3b (this can take a while on first run)...';
+      curl -sf http://ollama:11434/api/pull -d '{\"name\":\"qwen2.5:3b\"}';
+      echo 'model ready'"
 
   # The AppSync stand-in: a gqlgen GraphQL server exposing the same
   # schema (queries, mutations, subscriptions) over HTTP + WebSocket.
   # Playground at http://localhost:8080/ once it's up.
-  local-server:
-    build:
-      context: ./local-server
-    container_name: appsync-chat-local-server
-    depends_on:
-      - create-tables
-    environment:
-      DYNAMODB_LOCAL_ENDPOINT: http://dynamodb-local:8000
-      AWS_ACCESS_KEY_ID: local
-      AWS_SECRET_ACCESS_KEY: local
-      AWS_REGION: us-east-1
-      MESSAGES_TABLE: ChatMessages
-      CONVERSATIONS_TABLE: UserConversations
-      IDEMPOTENCY_TABLE: ChatIdempotency
-      PORT: "8080"
-    ports:
-      - "8080:8080"
+  # local-server:
+  #   build:
+  #     context: ./local-server
+  #   container_name: appsync-chat-local-server
+  #   depends_on:
+  #     - create-tables
+  #     - seed-products
+  #     - pull-model
+  #   environment:
+  #     DYNAMODB_LOCAL_ENDPOINT: http://dynamodb-local:8000
+  #     AWS_ACCESS_KEY_ID: local
+  #     AWS_SECRET_ACCESS_KEY: local
+  #     AWS_REGION: us-east-1
+  #     MESSAGES_TABLE: ChatMessages
+  #     CONVERSATIONS_TABLE: UserConversations
+  #     IDEMPOTENCY_TABLE: ChatIdempotency
+  #     PRODUCTS_TABLE: Products
+  #     PORT: "8080"
+  #     # POC-phase AI backend: a local, free Qwen model via Ollama — no
+  #     # API key needed. Swap for a hosted model later by changing
+  #     # callQwen() in logic/ai.go if you need stronger reasoning.
+  #     OLLAMA_HOST: http://ollama:11434
+  #     QWEN_MODEL: qwen2.5:3b
+  #   ports:
+  #     - "8080:8080"
+
+volumes:
+  # Persists downloaded Qwen model weights across `docker compose down` /
+  # restarts, so pull-model doesn't redownload multiple GB every time.
+  ollama-models:

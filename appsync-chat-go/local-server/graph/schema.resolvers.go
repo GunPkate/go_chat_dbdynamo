@@ -47,6 +47,30 @@ func (r *queryResolver) GetUnreadCount(ctx context.Context, chatRoomID string, u
 	return logic.GetUnreadCount(ctx, chatRoomID, userID)
 }
 
+// --- Customer side ---
+
+func (r *queryResolver) SearchProducts(ctx context.Context, query string) (*logic.AssistantReply, error) {
+	return logic.SearchProducts(ctx, query)
+}
+
+func (r *queryResolver) RecommendedProducts(ctx context.Context, freeTextContext *string) (*logic.AssistantReply, error) {
+	return logic.RecommendProducts(ctx, freeTextContext)
+}
+
+func (r *queryResolver) SubstituteProducts(ctx context.Context, productID string) (*logic.AssistantReply, error) {
+	return logic.SubstituteProducts(ctx, productID)
+}
+
+// --- Employee side ---
+
+func (r *queryResolver) StockInsights(ctx context.Context, question string) (*logic.AssistantReply, error) {
+	return logic.StockInsights(ctx, question)
+}
+
+func (r *queryResolver) StaffAssistant(ctx context.Context, question string) (*logic.AssistantReply, error) {
+	return logic.StaffAssistant(ctx, question)
+}
+
 // ---------- Mutation ----------
 
 type mutationResolver struct{ *Resolver }

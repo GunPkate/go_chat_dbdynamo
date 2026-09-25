@@ -46,4 +46,13 @@ aws dynamodb create-table \
   --billing-mode PAY_PER_REQUEST \
   >/dev/null 2>&1 && echo "  created" || echo "  already exists, skipping"
 
+echo "creating Products (pk: id)..."
+aws dynamodb create-table \
+  --endpoint-url "$ENDPOINT" \
+  --table-name Products \
+  --attribute-definitions AttributeName=id,AttributeType=S \
+  --key-schema AttributeName=id,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  >/dev/null 2>&1 && echo "  created" || echo "  already exists, skipping"
+
 echo "all tables ready"
